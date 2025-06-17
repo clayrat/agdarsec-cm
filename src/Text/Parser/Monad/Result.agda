@@ -24,7 +24,7 @@ import Function.Identity.Effectful as Id
 
 private
   variable
-    ℓ ℓe ℓa ℓb : Level
+    ℓe ℓa ℓb ℓ : Level
     E : 𝒰 ℓe
     A : 𝒰 ℓa
     B : 𝒰 ℓb
@@ -34,7 +34,7 @@ data Result (E : 𝒰 ℓe) (A : 𝒰 ℓa) : 𝒰 (ℓa ⊔ ℓe) where
   HardFail : E → Result E A
   Value    : A → Result E A
 
-result : (soft hard : E → B) (val : A → B) → Result E A → B
+result : (E → B) → (E → B) → (A → B) → Result E A → B
 result soft hard val (SoftFail e) = soft e
 result soft hard val (HardFail e) = hard e
 result soft hard val (Value v) = val v
@@ -46,53 +46,69 @@ from-maybe : E → Maybe A → Result E A
 from-maybe e = Maybe.rec (SoftFail e) Value
 
 map-res : (A → B) → Result E A → Result E B
-map-res f (SoftFail e) = SoftFail e
-map-res f (HardFail e) = HardFail e
-map-res f (Value v)    = Value (f v)
+map-res f r = result SoftFail HardFail (Value ∘ f) r
 
 app-res : Result E (A → B) → Result E A → Result E B
-app-res (SoftFail e)  _           = SoftFail e
-app-res (HardFail e)  _           = HardFail e
-app-res (Value _)    (SoftFail e) = SoftFail e
-app-res (Value _)    (HardFail e) = HardFail e
-app-res (Value f)    (Value x)    = Value (f x)
+app-res f r = result SoftFail HardFail (λ g → map-res g r) f
 
-ResultT : 𝒰≤ ℓe        -- Error
-        → (M : Effect)  -- Monad
-        → 𝒰 ℓa → 𝒰 (Effect.adj M (ℓe ⊔ ℓa))
-ResultT E M A =
-  let module M = Effect M in
-  M.₀ (Result (Liftℓ E) A)
+bind-res : Result E A → (A → Result E B) → Result E B
+bind-res r f = result SoftFail HardFail f r
 
--- TODO how to automate instance passing?
+record ResultT
+        (E : 𝒰≤ ℓe)              -- Error
+        (M : 𝒰 (ℓa ⊔ ℓe) → 𝒰 ℓ) -- Monad
+        (A : 𝒰 ℓa) : 𝒰 ℓ
+       where
+  constructor mkresultT
+  field run-resultT : M (Result (Liftℓ E) A)
+open ResultT public
+
+{-
+ResultT : 𝒰≤ ℓe                -- Error
+        → (𝒰 (ℓa ⊔ ℓe) → 𝒰 ℓ) -- Monad
+        → 𝒰 ℓa → 𝒰 ℓ
+ResultT E M A = M (Result (Liftℓ E) A)
+-}
+
+module _ {M : Effect} (let module M = Effect M) ⦃ mp : Map M ⦄ where
+
+  instance
+    ResultT-map : {E : 𝒰≤ ℓe}
+                → Map (eff (ResultT E M.₀))
+    ResultT-map .Map.map f x .run-resultT = map (map-res f) (x .run-resultT)
+
+
+module _ {M : Effect} (let module M = Effect M) ⦃ app : Idiom M ⦄ where
+
+  instance
+    ResultT-idiom : {E : 𝒰≤ ℓe}
+                  → Idiom (eff (ResultT E M.₀))
+    ResultT-idiom .Idiom.Map-idiom = ResultT-map
+    ResultT-idiom .Idiom.pure x .run-resultT = pure (Value x)
+    ResultT-idiom .Idiom._<*>_ mf mx .run-resultT =
+      map app-res (mf .run-resultT) <*> mx .run-resultT
+
+module _ {M : Effect} (let module M = Effect M) ⦃ bd : Bind M ⦄ where
+
+  instance
+    ResultT-bind : {E : 𝒰≤ ℓe}
+                 → Bind (eff (ResultT E M.₀))
+    ResultT-bind .Bind.Idiom-bind = ResultT-idiom
+    ResultT-bind .Bind._>>=_ x f .run-resultT =
+      (x .run-resultT) >>= result (pure ∘ SoftFail) (pure ∘ HardFail) (run-resultT ∘ f)
+
+    ResultT-choice : {E : 𝒰≤ ℓe}
+                   → Choice (eff (ResultT E M.₀))
+    ResultT-choice .Choice._<|>_ r1 r2 .run-resultT =
+      (r1 .run-resultT) >>= λ where
+                                (SoftFail _) → r2 .run-resultT
+                                r → pure r
+
+{-
 instance
-  ResultT-map : {E : 𝒰≤ ℓe} {M : Effect}
-                ⦃ mp : Map M ⦄
-              → Map (eff (ResultT E M))
-  ResultT-map ⦃ mp ⦄ .Map.map = map ⦃ r = mp ⦄ ∘ map-res
-
-  ResultT-idiom : {E : 𝒰≤ ℓe} {M : Effect}
-                  ⦃ app : Idiom M ⦄
-                → Idiom (eff (ResultT E M))
-  ResultT-idiom ⦃ app ⦄ .Idiom.Map-idiom = ResultT-map ⦃ mp = app .Map-idiom ⦄
-  ResultT-idiom ⦃ app ⦄ .Idiom.pure = pure ⦃ r = app ⦄ ∘ Value
-  ResultT-idiom ⦃ app ⦄ .Idiom._<*>_ mf mx = _<*>_ ⦃ r = app ⦄ (map ⦃ r = app .Map-idiom ⦄ app-res mf)  mx
-
-  ResultT-bind : {E : 𝒰≤ ℓe} {M : Effect}
-                 ⦃ bd : Bind M ⦄
-                → Bind (eff (ResultT E M))
-  ResultT-bind ⦃ bd ⦄ .Bind.Idiom-bind = ResultT-idiom ⦃ app = bd .Idiom-bind ⦄
-  ResultT-bind ⦃ bd ⦄ .Bind._>>=_ x f = _>>=_ ⦃ r = bd ⦄ x (result (pure ⦃ r = bd .Idiom-bind ⦄ ∘ SoftFail) (pure ⦃ r = bd .Idiom-bind ⦄ ∘ HardFail) f)
-
   Result-bind : {E : 𝒰≤ ℓe}
               → Bind (eff (Result (Liftℓ E)))
-  Result-bind = ResultT-bind ⦃ bd = Bind-Id ⦄
-
-  ResultT-choice : {E : 𝒰≤ ℓe} {M : Effect}
-                   ⦃ bd : Bind M ⦄
-                 → Choice (eff (ResultT E M))
-  ResultT-choice ⦃ bd ⦄ .Choice._<|>_ r1 r2 =
-    _>>=_ ⦃ r = bd ⦄ r1
-       (λ where
-            (SoftFail _) → r2
-            r → pure ⦃ r = bd .Idiom-bind ⦄ r)
+  Result-bind =
+     let qq = ResultT-bind ⦃ bd = Bind-Id ⦄ in
+     {!!}
+-}
