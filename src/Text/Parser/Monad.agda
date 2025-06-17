@@ -1,5 +1,3 @@
-{-# OPTIONS --safe #-}
-
 module Text.Parser.Monad where
 
 open import Foundations.Prelude
@@ -19,6 +17,7 @@ open import Data.Char -- .Base using (Char)
 open import Data.List as List -- using ([]; _∷_)
 open import Data.String
 open import Data.Maybe as Maybe
+open import Data.Vec.Inductive
 
 {-
 
@@ -60,6 +59,7 @@ open import Level.Bounded
 open import Data.Subset
 open import Data.List.NonEmpty as List⁺ -- using (List⁺)
 open import Data.List.Sized.Interface using (Sized)
+open import Data.Text.Sized
 
 open import Text.Parser.Types.Core
 open import Text.Parser.Types
@@ -95,124 +95,101 @@ Agdarsec : 𝒰≤ ℓb        -- Error
 Agdarsec E A = AgdarsecT E A id
 
 module _ {E A : 𝒰≤ ℓb}
-         {M : Effect} (let module M = Effect M)
+         {M : Effect} -- (let module M = Effect M)  -- doesn't work here for some reason
          ⦃ bd : Bind M ⦄
          ⦃ S : Subset (((Position 0↑ℓ) ×ℓ Listℓ A) .ty) (E .ty) ⦄
         where
 
-  open Map ⦃ ... ⦄
+  private
+    module M = Effect M  -- only here
+
   open BindState ⦃ ... ⦄
 
   instance
     map-agdarsecT : Map (eff (AgdarsecT E A M.₀))
-    map-agdarsecT .Map.map f x .run-agdarsecT = {!!}
+    map-agdarsecT .Map.map f x .run-agdarsecT =
+      map ⦃ r = map-stateT ⦃ mp = ResultT-map ⦃ mp = bd .Idiom-bind .Map-idiom ⦄ ⦄ ⦄  -- why?
+          f (x .run-agdarsecT)
 
-      -- map f (x .run-agdarsecT)
-      --map-stateT ⦃ mp = ResultT-map ⦃ mp = bd .Idiom-bind .Map-idiom ⦄ ⦄
-
-{-
     idiom-agdarsecT : Idiom (eff (AgdarsecT E A M.₀))
-    idiom-agdarsecT = {!!}
-     -- idiom-stateT ⦃ bd = ResultT-bind ⦃ bd = bd ⦄ ⦄
+    idiom-agdarsecT .Idiom.Map-idiom = map-agdarsecT
+    idiom-agdarsecT .Idiom.pure x .run-agdarsecT =
+      pure ⦃ r = idiom-stateT ⦃ bd = ResultT-bind ⦃ bd = bd ⦄ ⦄ ⦄  -- why?
+           x
+    idiom-agdarsecT .Idiom._<*>_ f x .run-agdarsecT =
+      _<*>_ ⦃ r = idiom-stateT ⦃ bd = ResultT-bind ⦃ bd = bd ⦄ ⦄ ⦄ -- why?
+            (f .run-agdarsecT) (x .run-agdarsecT)
 
     bind-agdarsecT : Bind (eff (AgdarsecT E A M.₀))
-    bind-agdarsecT = {!!}
-      -- bind-stateT ⦃ bd = ResultT-bind ⦃ bd = bd ⦄ ⦄
+    bind-agdarsecT .Bind.Idiom-bind = idiom-agdarsecT
+    bind-agdarsecT .Bind._>>=_ x f .run-agdarsecT =
+      _>>=_ ⦃ r = bind-stateT ⦃ bd = ResultT-bind ⦃ bd = bd ⦄ ⦄ ⦄ -- why?
+            (x .run-agdarsecT) (run-agdarsecT ∘ f)
 
     bindstate-agdarsecT : BindState (Liftℓ ((Position 0↑ℓ) ×ℓ Listℓ A))
                                     (eff (AgdarsecT E A M.₀))
-    bindstate-agdarsecT = {!!}
-      -- bindstate-stateT ⦃ bd = ResultT-bind ⦃ bd = bd ⦄ ⦄
+    bindstate-agdarsecT .BindState.Bind-state = bind-agdarsecT
+    bindstate-agdarsecT .BindState.gets f .run-agdarsecT =
+      gets ⦃ r = bindstate-stateT ⦃ bd = ResultT-bind ⦃ bd = bd ⦄ ⦄ ⦄ -- why?
+           f
+    bindstate-agdarsecT .BindState.modify f .run-agdarsecT =
+      modify ⦃ r = bindstate-stateT ⦃ bd = ResultT-bind ⦃ bd = bd ⦄ ⦄ ⦄ -- why?
+             f
 
     choice-agdarsecT : Choice (eff (AgdarsecT E A M.₀))
-    choice-agdarsecT = {!!}
-    -- choice-stateT ⦃ ch = ResultT-choice ⦃ bd = bd ⦄ ⦄
+    choice-agdarsecT .Choice._<|>_ a b .run-agdarsecT =
+      _<|>_ ⦃ r = choice-stateT ⦃ ch = ResultT-choice ⦃ bd = bd ⦄ ⦄ ⦄ -- why?
+            (a .run-agdarsecT) (b .run-agdarsecT)
 
     alt-agdarsecT : Alt (eff (AgdarsecT E A M.₀))
     alt-agdarsecT .Alt.Choice-alt =
-      {!!}
-    alt-agdarsecT .Alt.fail .run-agdarsecT .run-stateT =
-      {!!}
-      -- pure ⦃ r = bd .Idiom-bind ⦄ ∘ SoftFail ∘ mapℓ (S .into)
--}
-{-
---  open Bind ⦃ ... ⦄
-  open BindState ⦃ ... ⦄
-
-  map-agdarsecT : Map (eff (AgdarsecT E A M))
-  map-agdarsecT = map-stateT ⦃ mp = ResultT-map ⦃ mp = bd .Idiom-bind .Map-idiom ⦄ ⦄
-
-  idiom-agdarsecT : Idiom (eff (AgdarsecT E A M))
-  idiom-agdarsecT = idiom-stateT ⦃ bd = ResultT-bind ⦃ bd = bd ⦄ ⦄
-
-  bind-agdarsecT : Bind (eff (AgdarsecT E A M))
-  bind-agdarsecT = bind-stateT ⦃ bd = ResultT-bind ⦃ bd = bd ⦄ ⦄
-
-  bindstate-agdarsecT : BindState (Liftℓ ((Position 0↑ℓ) ×ℓ Listℓ A))
-                                  (eff (AgdarsecT E A M))
-  bindstate-agdarsecT = bindstate-stateT ⦃ bd = ResultT-bind ⦃ bd = bd ⦄ ⦄
-
-  choice-agdarsecT : Choice (eff (AgdarsecT E A M))
-  choice-agdarsecT = choice-stateT ⦃ ch = ResultT-choice ⦃ bd = bd ⦄ ⦄
-
-  instance
-    alt-agdarsecT : Alt (eff (AgdarsecT E A M))
-    alt-agdarsecT .Alt.Choice-alt =
       choice-agdarsecT
-    alt-agdarsecT .Alt.fail .run-stateT =
-      pure ⦃ r = bd .Idiom-bind ⦄ ∘ SoftFail ∘ mapℓ (S .into)
+    alt-agdarsecT .Alt.fail .run-agdarsecT .run-stateT x .run-resultT =
+      pure $ SoftFail $ mapℓ (S .into) x
 
-  getPosition : AgdarsecT {ℓ = ℓ} E A M (Liftℓ (Position 0↑ℓ))
-  getPosition =
-    _<$>_ -- ⦃ map-agdarsecT ⦄
-          (mapℓ fst)
-          (get
-            -- ⦃ r = bindstate-agdarsecT ⦄
-            )
+  getPosition : AgdarsecT E A M.₀ (Liftℓ (Position 0↑ℓ))
+  getPosition = mapℓ fst <$> get
 
-  getAnnotations : AgdarsecT E A M (Liftℓ (Listℓ A))
-  getAnnotations =
-    _<$>_ ⦃ map-agdarsecT ⦄
-          (mapℓ snd)
-          (get ⦃ r = bindstate-agdarsecT ⦄)
--}
+  getAnnotations : AgdarsecT E A M.₀ (Liftℓ (Listℓ A))
+  getAnnotations = mapℓ snd <$> get
 
-{-
   withAnnotation : {T : 𝒰 ℓ}
-                 → A .ty → AgdarsecT E A M T → AgdarsecT E A M T
+                 → A .ty → AgdarsecT E A M.₀ T → AgdarsecT E A M.₀ T
   withAnnotation c ma =
-    do modify {M = eff (AgdarsecT E A M)} ⦃ r = bindstate-agdarsecT ⦄
-              (mapℓ $ second (c ∷_))
+    do modify (mapℓ $ second (c ∷_))
        a ← ma
-       modify {M = eff (AgdarsecT E A M)} ⦃ r = bindstate-agdarsecT ⦄
-              (mapℓ $ second (drop 1))
-       pure {M = eff (AgdarsecT E A M)} ⦃ r = idiom-agdarsecT ⦄ a
--}
+       modify (mapℓ $ second (drop 1))
+       pure ⦃ r = idiom-agdarsecT ⦄  -- why?
+            a
 
-{-
-
-  withAnnotation : ∀ {A} → theSet Ann → AgdarsecT E Ann M A → AgdarsecT E Ann M A
-  withAnnotation c ma = let open ST in do
-    modify (Level≤.map $′ map₂ (c ∷_))
-    a ← ma
-    modify (Level≤.map $′ map₂ (drop 1))
-    pure a
-
-  recordChar : Char → AgdarsecT E Ann M (Lift ⊤)
-  recordChar c = _ ST.<$ ST.modify (Level≤.map $′ map₁ (update c))
+  recordChar : ∀ {ℓ} → Char → AgdarsecT E A M.₀ (Liftℓ ⊤ℓ)
+  recordChar {ℓ} c = _<$_ ⦃ map-agdarsecT ⦄ -- why?
+                          (lift {ℓ′ = ℓ} (lift tt))
+                          (modify (mapℓ (first (update c))))
 
   -- Commiting to a branch makes all the failures in that branch hard failures
   -- that we cannot recover from
-  commit : ∀ {A} → AgdarsecT E Ann M A → AgdarsecT E Ann M A
-  commit m = mkStateT λ s → result HardFail HardFail Value 𝕄.<$> runStateT m s
+  commit : {T : 𝒰 ℓ} → AgdarsecT E A M.₀ T → AgdarsecT E A M.₀ T
+  commit m .run-agdarsecT .run-stateT s .run-resultT =
+    _<$>_ ⦃ bd .Idiom-bind .Map-idiom ⦄ -- why?
+          (result HardFail HardFail Value)
+          (m .run-agdarsecT .run-stateT s .run-resultT)
 
-  param : ∀ Tok Toks recTok → Parameters l
+  param : ∀ Tok Toks recTok → Parameters ℓ
   param Tok Toks recTok = record
     { Tok         = Tok
     ; Toks        = Toks
-    ; M           = AgdarsecT E Ann M
+    ; M           = eff (AgdarsecT E A M.₀)
     ; recordToken = recTok
     }
+
+  chars : Parameters ℓ
+  chars = param (Char 0↑ℓ) (λ n → Vecℓ (Char 0↑ℓ) n) recordChar
+
+  raw : Parameters ℓ
+  raw = param (Char 0↑ℓ) (λ n → (Text n) 0↑ℓ) recordChar
+
+{-
 
   chars : Parameters l
   chars = param [ Char ] (Vec [ Char ]) recordChar

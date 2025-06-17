@@ -54,10 +54,9 @@ app-res f r = result SoftFail HardFail (λ g → map-res g r) f
 bind-res : Result E A → (A → Result E B) → Result E B
 bind-res r f = result SoftFail HardFail f r
 
-record ResultT
-        (E : 𝒰≤ ℓe)              -- Error
-        (M : 𝒰 (ℓa ⊔ ℓe) → 𝒰 ℓ) -- Monad
-        (A : 𝒰 ℓa) : 𝒰 ℓ
+record ResultT (E : 𝒰≤ ℓe)              -- Error
+               (M : 𝒰 (ℓa ⊔ ℓe) → 𝒰 ℓ) -- Monad
+               (A : 𝒰 ℓa) : 𝒰 ℓ
        where
   constructor mkresultT
   field run-resultT : M (Result (Liftℓ E) A)

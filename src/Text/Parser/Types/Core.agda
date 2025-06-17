@@ -26,7 +26,7 @@ record Parameters (ℓ : Level) : 𝒰ω where
      M : Effect -- 𝒰 ℓ → 𝒰 ℓ
 -- The action allowing us to track consumed tokens
      recordToken : -- let module M = Effect M in
-                   Tok .ty → Effect.₀ M ⊤
+                   Tok .ty → Effect.₀ M (Liftℓ {ℓ = ℓ} ⊤ℓ)
 
 --------------------------------------------------------------------------------
 -- SUCCESS
