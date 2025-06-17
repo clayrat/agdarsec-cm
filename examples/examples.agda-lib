@@ -1,0 +1,13 @@
+name: agdarsec-examples
+include: .
+depend: cubical-mini, agdarsec
+flags:
+  --erased-cubical
+  --erasure
+  --erased-matches
+  --guardedness
+  --no-import-sorts
+  --postfix-projections
+  --hidden-argument-puns
+
+  -WnoUnsupportedIndexedMatch

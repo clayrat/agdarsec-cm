@@ -97,7 +97,6 @@ Agdarsec E A = AgdarsecT E A id
 module _ {E A : 𝒰≤ ℓb}
          {M : Effect} -- (let module M = Effect M)  -- doesn't work here for some reason
          ⦃ bd : Bind M ⦄
-         ⦃ S : Subset (((Position 0↑ℓ) ×ℓ Listℓ A) .ty) (E .ty) ⦄
         where
 
   private
@@ -141,10 +140,11 @@ module _ {E A : 𝒰≤ ℓb}
       _<|>_ ⦃ r = choice-stateT ⦃ ch = ResultT-choice ⦃ bd = bd ⦄ ⦄ ⦄ -- why?
             (a .run-agdarsecT) (b .run-agdarsecT)
 
-    alt-agdarsecT : Alt (eff (AgdarsecT E A M.₀))
+    alt-agdarsecT : ⦃ S : Subset (((Position 0↑ℓ) ×ℓ Listℓ A) .ty) (E .ty) ⦄
+                  → Alt (eff (AgdarsecT E A M.₀))
     alt-agdarsecT .Alt.Choice-alt =
       choice-agdarsecT
-    alt-agdarsecT .Alt.fail .run-agdarsecT .run-stateT x .run-resultT =
+    alt-agdarsecT ⦃ S ⦄ .Alt.fail .run-agdarsecT .run-stateT x .run-resultT =
       pure $ SoftFail $ mapℓ (S .into) x
 
   getPosition : AgdarsecT E A M.₀ (Liftℓ (Position 0↑ℓ))
@@ -175,7 +175,10 @@ module _ {E A : 𝒰≤ ℓb}
           (result HardFail HardFail Value)
           (m .run-agdarsecT .run-stateT s .run-resultT)
 
-  param : ∀ Tok Toks recTok → Parameters ℓ
+  param : (Tok : 𝒰≤ ℓ)
+        → (ℕ → 𝒰≤ ℓ)
+        → (Tok .ty → AgdarsecT E A M.₀ (Liftℓ ⊤ℓ))
+        → Parameters ℓ
   param Tok Toks recTok = record
     { Tok         = Tok
     ; Toks        = Toks
@@ -189,42 +192,37 @@ module _ {E A : 𝒰≤ ℓb}
   raw : Parameters ℓ
   raw = param (Char 0↑ℓ) (λ n → (Text n) 0↑ℓ) recordChar
 
-{-
+module _ {ℓ} {E A : 𝒰≤ ℓ}
+         ⦃ S : Subset (((Position 0↑ℓ) ×ℓ Listℓ A) .ty) (E .ty) ⦄
+         where
 
-  chars : Parameters l
-  chars = param [ Char ] (Vec [ Char ]) recordChar
+  module _ {Tok : 𝒰≤ ℓ}
+           {Toks : ℕ → 𝒰≤ ℓ}
+           {recTok : Tok .ty → AgdarsecT E A id (Liftℓ ⊤ℓ)} where
 
-  raw : Parameters l
-  raw = param [ Char ] (λ n → [ Text n ]) recordChar
+    private P = param ⦃ bd = Bind-Id ⦄
+                      Tok Toks recTok
+    commitP : {A : 𝒰≤ ℓ} → ∀[ Parser P A ⇒ Parser P A ]
+    commitP p .run-parser m≤n s =
+      commit ⦃ bd = Bind-Id ⦄
+             (mkagdarsecT (p .run-parser m≤n s .run-agdarsecT))
 
-module Agdarsec l (E Ann : Set≤ l) (𝕊 : Subset (theSet ([ Position ] × List Ann)) (theSet E)) where
+module _ {ℓ} where
 
-  private module M = AgdarsecT E Ann Id.monad 𝕊
-  open M public renaming (monadT to monad) hiding (commit)
+--  open Agdarsec l ⊤ ⊥ _ public
 
-  module _ {Tok Toks recTok} where
+  vec : 𝒰≤ ℓ → Parameters ℓ
+  vec t .Parameters.Tok = t
+  vec t .Parameters.Toks = Vecℓ t
+  vec t .Parameters.M = eff (Agdarsec {ℓb = ℓ} ⊤ℓ ⊥ℓ)
+  vec t .Parameters.recordToken _ =
+    pure ⦃ r = idiom-agdarsecT ⦃ bd = Bind-Id ⦄ ⦄
+         (lift (lift tt))
 
-    private P = param Tok Toks recTok
-    commit : {A : Set≤ l} → ∀[ Parser P A ⇒ Parser P A ]
-    runParser (commit p) m≤n s = M.commit (runParser p m≤n s)
-
-module Agdarsec′ {l : Level} where
-
-  open Agdarsec l ⊤ ⊥ _ public
-
-  vec : Set≤ l → Parameters l
-  vec Tok = record
-    { Tok         = Tok
-    ; Toks        = Vec Tok
-    ; M           = Agdarsec ⊤ ⊥
-    ; recordToken = λ _ → M.pure _
-    } where module M = RawMonad monad
-
-  txt : Set≤ l → Parameters l
-  txt Tok = record
-    { Tok         = Tok
-    ; Toks        = λ n → [ Text n ]
-    ; M           = Agdarsec ⊤ ⊥
-    ; recordToken = λ _ → M.pure _
-    } where module M = RawMonad monad
--}
+  txt : 𝒰≤ ℓ → Parameters ℓ
+  txt t .Parameters.Tok = t
+  txt t .Parameters.Toks n = Text n 0↑ℓ
+  txt t .Parameters.M = eff (Agdarsec {ℓb = ℓ} ⊤ℓ ⊥ℓ)
+  txt t .Parameters.recordToken _ =
+    pure ⦃ r = idiom-agdarsecT ⦃ bd = Bind-Id ⦄ ⦄
+         (lift (lift tt))
