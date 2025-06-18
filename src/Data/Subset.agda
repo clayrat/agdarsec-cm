@@ -7,6 +7,8 @@ record Subset {ℓa ℓb} (A : 𝒰 ℓa) (B : 𝒰 ℓb) : 𝒰 (ℓa ⊔ ℓb)
   field into : A → B
 open Subset public
 
+open import Data.Unit
+open import Data.Empty
 open import Data.List
 open import Data.Char
 open import Data.String
@@ -21,4 +23,10 @@ instance
 
   Subset-refl : ∀ {ℓa} {A : 𝒰 ℓa} → Subset A A
   Subset-refl .into x = x
+
+  Subset-top : ∀ {ℓa} {A : 𝒰 ℓa} → Subset A ⊤
+  Subset-top .into _ = tt
+
+  Subset-bot : ∀ {ℓa} {A : 𝒰 ℓa} → Subset ⊥ A
+  Subset-bot .into x = absurd x
 
