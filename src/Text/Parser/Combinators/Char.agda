@@ -113,6 +113,12 @@ module _ -- {{𝕄 : RawMonadPlus M}}
              → ∀[ Parser A ⇒ Parser A ]
   withSpaces A = spaces ?&> A <&? box spaces
 
+ num : ⦃ bd : Bind M ⦄ ⦃ alt : Alt M ⦄
+     → ∀[ Parser Tok ]
+ num = anyOf
+            $ map (C .into)
+            $ string→list "0123456789"
+
  lowerAlpha : ⦃ bd : Bind M ⦄ ⦃ alt : Alt M ⦄
             → ∀[ Parser Tok ]
  lowerAlpha = anyOf

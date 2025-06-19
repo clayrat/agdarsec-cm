@@ -27,7 +27,7 @@ import Induction.Nat.Strong as INS
 open import Level.Bounded
 
 open import Base 0ℓ
-open import Identifier
+--open import Identifier
 
 data Expr : 𝒰 where
   Var     : Char → Expr
