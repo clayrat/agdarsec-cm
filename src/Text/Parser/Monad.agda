@@ -72,13 +72,13 @@ private
 
 -- AGDARSECT
 
-record AgdarsecT (E : 𝒰≤ ℓb)               -- Error
-                 (A : 𝒰≤ ℓb)               -- Annotation
-                 (M : 𝒰 (ℓb ⊔ ℓa) → 𝒰 ℓ)  -- Monad
-                 (T : 𝒰 ℓa) : 𝒰 (ℓb ⊔ ℓ)
+record AgdarsecT (E : 𝒰≤ ℓb) -- Error
+                 (A : 𝒰≤ ℓb) -- Annotation
+                 (M : Effect) -- Monad
+                 (T : 𝒰 ℓa) : 𝒰 (ℓb ⊔ M .Effect.adj (ℓb ⊔ ℓa))
                  where
   constructor mkagdarsecT
-  field run-agdarsecT : StateT (Liftℓ ((Position 0↑ℓ) ×ℓ Listℓ A)) (ResultT E M) T
+  field run-agdarsecT : StateT (Liftℓ ((Position 0↑ℓ) ×ℓ Listℓ A)) (eff (ResultT E M)) T
 open AgdarsecT public
 
 {-
@@ -92,97 +92,78 @@ AgdarsecT E A M = StateT (Liftℓ ((Position 0↑ℓ) ×ℓ Listℓ A)) (ResultT
 Agdarsec : 𝒰≤ ℓb        -- Error
          → 𝒰≤ ℓb        -- Annotation
          → 𝒰 ℓ → 𝒰 (ℓb ⊔ ℓ)
-Agdarsec E A = AgdarsecT E A id
+Agdarsec E A = AgdarsecT E A (eff id)
 
 module _ {E A : 𝒰≤ ℓb}
-         {M : Effect} -- (let module M = Effect M)  -- doesn't work here for some reason
+         {M : Effect} (let module M = Effect M)  -- doesn't work here for some reason
          ⦃ bd : Bind M ⦄
         where
-
-  private
-    module M = Effect M  -- only here
 
   open BindState ⦃ ... ⦄
 
   instance
-    map-agdarsecT : Map (eff (AgdarsecT E A M.₀))
-    map-agdarsecT .Map.map f x .run-agdarsecT =
-      map ⦃ r = map-stateT ⦃ mp = ResultT-map ⦃ mp = bd .Idiom-bind .Map-idiom ⦄ ⦄ ⦄  -- why?
-          f (x .run-agdarsecT)
+    map-agdarsecT : Map (eff (AgdarsecT E A M))
+    map-agdarsecT .Map.map f x .run-agdarsecT = map f (x .run-agdarsecT)
 
-    idiom-agdarsecT : Idiom (eff (AgdarsecT E A M.₀))
+    idiom-agdarsecT : Idiom (eff (AgdarsecT E A M))
     idiom-agdarsecT .Idiom.Map-idiom = map-agdarsecT
-    idiom-agdarsecT .Idiom.pure x .run-agdarsecT =
-      pure ⦃ r = idiom-stateT ⦃ bd = ResultT-bind ⦃ bd = bd ⦄ ⦄ ⦄  -- why?
-           x
+    idiom-agdarsecT .Idiom.pure x .run-agdarsecT = pure x
     idiom-agdarsecT .Idiom._<*>_ f x .run-agdarsecT =
-      _<*>_ ⦃ r = idiom-stateT ⦃ bd = ResultT-bind ⦃ bd = bd ⦄ ⦄ ⦄ -- why?
-            (f .run-agdarsecT) (x .run-agdarsecT)
+      f .run-agdarsecT <*> x .run-agdarsecT
 
-    bind-agdarsecT : Bind (eff (AgdarsecT E A M.₀))
+    bind-agdarsecT : Bind (eff (AgdarsecT E A M))
     bind-agdarsecT .Bind.Idiom-bind = idiom-agdarsecT
     bind-agdarsecT .Bind._>>=_ x f .run-agdarsecT =
-      _>>=_ ⦃ r = bind-stateT ⦃ bd = ResultT-bind ⦃ bd = bd ⦄ ⦄ ⦄ -- why?
-            (x .run-agdarsecT) (run-agdarsecT ∘ f)
+      x .run-agdarsecT >>= run-agdarsecT ∘ f
 
     bindstate-agdarsecT : BindState (Liftℓ ((Position 0↑ℓ) ×ℓ Listℓ A))
-                                    (eff (AgdarsecT E A M.₀))
+                                    (eff (AgdarsecT E A M))
     bindstate-agdarsecT .BindState.Bind-state = bind-agdarsecT
-    bindstate-agdarsecT .BindState.gets f .run-agdarsecT =
-      gets ⦃ r = bindstate-stateT ⦃ bd = ResultT-bind ⦃ bd = bd ⦄ ⦄ ⦄ -- why?
-           f
-    bindstate-agdarsecT .BindState.modify f .run-agdarsecT =
-      modify ⦃ r = bindstate-stateT ⦃ bd = ResultT-bind ⦃ bd = bd ⦄ ⦄ ⦄ -- why?
-             f
+    bindstate-agdarsecT .BindState.gets f .run-agdarsecT = gets f
+    bindstate-agdarsecT .BindState.modify f .run-agdarsecT = modify f
 
-    choice-agdarsecT : Choice (eff (AgdarsecT E A M.₀))
+    choice-agdarsecT : Choice (eff (AgdarsecT E A M))
     choice-agdarsecT .Choice._<|>_ a b .run-agdarsecT =
-      _<|>_ ⦃ r = choice-stateT ⦃ ch = ResultT-choice ⦃ bd = bd ⦄ ⦄ ⦄ -- why?
-            (a .run-agdarsecT) (b .run-agdarsecT)
+      a .run-agdarsecT <|> b .run-agdarsecT
 
     alt-agdarsecT : ⦃ S : Subset (((Position 0↑ℓ) ×ℓ Listℓ A) .ty) (E .ty) ⦄
-                  → Alt (eff (AgdarsecT E A M.₀))
+                  → Alt (eff (AgdarsecT E A M))
     alt-agdarsecT .Alt.Choice-alt =
       choice-agdarsecT
     alt-agdarsecT ⦃ S ⦄ .Alt.fail .run-agdarsecT .run-stateT x .run-resultT =
       pure $ SoftFail $ mapℓ (S .into) x
 
-  getPosition : AgdarsecT E A M.₀ (Liftℓ (Position 0↑ℓ))
+  getPosition : AgdarsecT E A M (Liftℓ (Position 0↑ℓ))
   getPosition = mapℓ fst <$> get
 
-  getAnnotations : AgdarsecT E A M.₀ (Liftℓ (Listℓ A))
+  getAnnotations : AgdarsecT E A M (Liftℓ (Listℓ A))
   getAnnotations = mapℓ snd <$> get
 
   withAnnotation : {T : 𝒰 ℓ}
-                 → A .ty → AgdarsecT E A M.₀ T → AgdarsecT E A M.₀ T
+                 → A .ty → AgdarsecT E A M T → AgdarsecT E A M T
   withAnnotation c ma =
     do modify (mapℓ $ second (c ∷_))
        a ← ma
        modify (mapℓ $ second (drop 1))
-       pure ⦃ r = idiom-agdarsecT ⦄  -- why?
-            a
+       pure a
 
-  recordChar : ∀ {ℓ} → Char → AgdarsecT E A M.₀ (Liftℓ ⊤ℓ)
-  recordChar {ℓ} c = _<$_ ⦃ map-agdarsecT ⦄ -- why?
-                          (lift {ℓ′ = ℓ} (lift tt))
-                          (modify (mapℓ (first (update c))))
+  recordChar : ∀ {ℓ} → Char → AgdarsecT E A M (Liftℓ ⊤ℓ)
+  recordChar {ℓ} c = lift {ℓ′ = ℓ} (lift tt) <$ modify (mapℓ (first (update c)))
 
   -- Commiting to a branch makes all the failures in that branch hard failures
   -- that we cannot recover from
-  commit : {T : 𝒰 ℓ} → AgdarsecT E A M.₀ T → AgdarsecT E A M.₀ T
+  commit : {T : 𝒰 ℓ} → AgdarsecT E A M T → AgdarsecT E A M T
   commit m .run-agdarsecT .run-stateT s .run-resultT =
-    _<$>_ ⦃ bd .Idiom-bind .Map-idiom ⦄ -- why?
-          (result HardFail HardFail Value)
-          (m .run-agdarsecT .run-stateT s .run-resultT)
+    result HardFail HardFail Value <$> m .run-agdarsecT .run-stateT s .run-resultT
 
   param : (Tok : 𝒰≤ ℓ)
         → (ℕ → 𝒰≤ ℓ)
-        → (Tok .ty → AgdarsecT E A M.₀ (Liftℓ ⊤ℓ))
+        → (Tok .ty → AgdarsecT E A M (Liftℓ ⊤ℓ))
         → Parameters ℓ
   param Tok Toks recTok = record
     { Tok         = Tok
     ; Toks        = Toks
-    ; M           = eff (AgdarsecT E A M.₀)
+    ; M           = eff (AgdarsecT E A M)
     ; recordToken = recTok
     }
 
@@ -198,14 +179,14 @@ module _ {ℓ} {E A : 𝒰≤ ℓ}
 
   module _ {Tok : 𝒰≤ ℓ}
            {Toks : ℕ → 𝒰≤ ℓ}
-           {recTok : Tok .ty → AgdarsecT E A id (Liftℓ ⊤ℓ)} where
+           {recTok : Tok .ty → AgdarsecT E A (eff id) (Liftℓ ⊤ℓ)} where
 
     private P = param ⦃ bd = Bind-Id ⦄
                       Tok Toks recTok
     commitP : {A : 𝒰≤ ℓ} → ∀[ Parser P A ⇒ Parser P A ]
     commitP p .run-parser m≤n s =
-      commit ⦃ bd = Bind-Id ⦄
-             (mkagdarsecT (p .run-parser m≤n s .run-agdarsecT))
+      commit (mkagdarsecT (p .run-parser m≤n s .run-agdarsecT))
+        where instance _ = Bind-Id
 
 module _ {ℓ} where
 
@@ -216,13 +197,13 @@ module _ {ℓ} where
   vec t .Parameters.Toks = Vecℓ t
   vec t .Parameters.M = eff (Agdarsec {ℓb = ℓ} ⊤ℓ ⊥ℓ)
   vec t .Parameters.recordToken _ =
-    pure ⦃ r = idiom-agdarsecT ⦃ bd = Bind-Id ⦄ ⦄
-         (lift (lift tt))
+    pure (lift (lift tt))
+      where instance _ = Bind-Id
 
   txt : 𝒰≤ ℓ → Parameters ℓ
   txt t .Parameters.Tok = t
   txt t .Parameters.Toks n = Text n 0↑ℓ
   txt t .Parameters.M = eff (Agdarsec {ℓb = ℓ} ⊤ℓ ⊥ℓ)
   txt t .Parameters.recordToken _ =
-    pure ⦃ r = idiom-agdarsecT ⦃ bd = Bind-Id ⦄ ⦄
-         (lift (lift tt))
+    pure (lift (lift tt))
+      where instance _ = Bind-Id

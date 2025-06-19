@@ -54,12 +54,13 @@ app-res f r = result SoftFail HardFail (λ g → map-res g r) f
 bind-res : Result E A → (A → Result E B) → Result E B
 bind-res r f = result SoftFail HardFail f r
 
-record ResultT (E : 𝒰≤ ℓe)              -- Error
-               (M : 𝒰 (ℓa ⊔ ℓe) → 𝒰 ℓ) -- Monad
-               (A : 𝒰 ℓa) : 𝒰 ℓ
+record ResultT (E : 𝒰≤ ℓe)  -- Error
+               (M : Effect) -- Monad
+               (A : 𝒰 ℓa) : 𝒰 (M .Effect.adj (ℓe ⊔ ℓa))
        where
   constructor mkresultT
-  field run-resultT : M (Result (Liftℓ E) A)
+  private module M = Effect M
+  field run-resultT : M.₀ (Result (Liftℓ E) A)
 open ResultT public
 
 {-
@@ -73,7 +74,7 @@ module _ {M : Effect} (let module M = Effect M) ⦃ mp : Map M ⦄ where
 
   instance
     ResultT-map : {E : 𝒰≤ ℓe}
-                → Map (eff (ResultT E M.₀))
+                → Map (eff (ResultT E M))
     ResultT-map .Map.map f x .run-resultT = map (map-res f) (x .run-resultT)
 
 
@@ -81,7 +82,7 @@ module _ {M : Effect} (let module M = Effect M) ⦃ app : Idiom M ⦄ where
 
   instance
     ResultT-idiom : {E : 𝒰≤ ℓe}
-                  → Idiom (eff (ResultT E M.₀))
+                  → Idiom (eff (ResultT E M))
     ResultT-idiom .Idiom.Map-idiom = ResultT-map
     ResultT-idiom .Idiom.pure x .run-resultT = pure (Value x)
     ResultT-idiom .Idiom._<*>_ mf mx .run-resultT =
@@ -91,13 +92,13 @@ module _ {M : Effect} (let module M = Effect M) ⦃ bd : Bind M ⦄ where
 
   instance
     ResultT-bind : {E : 𝒰≤ ℓe}
-                 → Bind (eff (ResultT E M.₀))
+                 → Bind (eff (ResultT E M))
     ResultT-bind .Bind.Idiom-bind = ResultT-idiom
     ResultT-bind .Bind._>>=_ x f .run-resultT =
       (x .run-resultT) >>= result (pure ∘ SoftFail) (pure ∘ HardFail) (run-resultT ∘ f)
 
     ResultT-choice : {E : 𝒰≤ ℓe}
-                   → Choice (eff (ResultT E M.₀))
+                   → Choice (eff (ResultT E M))
     ResultT-choice .Choice._<|>_ r1 r2 .run-resultT =
       (r1 .run-resultT) >>= λ where
                                 (SoftFail _) → r2 .run-resultT

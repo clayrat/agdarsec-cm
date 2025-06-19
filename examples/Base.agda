@@ -102,13 +102,13 @@ instance
 
   runResultT : {M : Effect} {E : 𝒰≤ ℓ} (let module M = Effect M)
                ⦃ rn : BindRun M ⦄
-             → BindRun (eff (ResultT E M.₀))
+             → BindRun (eff (ResultT E M))
   runResultT ⦃ rn ⦄ .runM x =
      concat $ map {M = eff List} (runResult .runM) $ rn .runM (x .run-resultT)
 
   runStateT : {M : Effect} {A : 𝒰≤ ℓ} (let module M = Effect M)
               ⦃ rn : BindRun M ⦄
-            → BindRun (eff (StateT (Liftℓ ((Position 0↑ℓ) ×ℓ Listℓ A)) M.₀))
+            → BindRun (eff (StateT (Liftℓ ((Position 0↑ℓ) ×ℓ Listℓ A)) M))
   runStateT ⦃ rn ⦄ .runM st =
     map snd $
     rn .runM $
@@ -116,12 +116,9 @@ instance
 
   runAgdarsecT : {M : Effect} {E A : 𝒰≤ ℓ} (let module M = Effect M)
                  ⦃ rn : BindRun M ⦄
-               → BindRun (eff (AgdarsecT E A M.₀))
+               → BindRun (eff (AgdarsecT E A M))
   runAgdarsecT {M} {E} {A} ⦃ rn ⦄ .runM x =
-    let qq = x .run-agdarsecT in
-    runStateT {M = eff (ResultT E (Effect.₀ M))}
-              ⦃ rn = runResultT ⦃ rn = rn ⦄ ⦄
-              .runM qq
+    runStateT .runM (x .run-agdarsecT)
 
 {-
 
