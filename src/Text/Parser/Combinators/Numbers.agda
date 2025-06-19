@@ -8,10 +8,13 @@ open import Text.Parser.Types.Core using (Parameters)
 
 module Text.Parser.Combinators.Numbers {ℓ} {P : Parameters ℓ} where
 
+open import Data.Bool
 open import Data.Char -- .Base using (Char)
 open import Data.Nat
 open import Data.List as List -- using ([]; _∷_)
-
+open import Data.Int.Base -- using (ℤ; -_; +_; _◃_)
+open import Data.Float.Base -- as Float using (Float; fromℕ; fromℤ)
+open import Data.Maybe as Maybe
 {-
 open import Data.Float.Base as Float using (Float; fromℕ; fromℤ)
 open import Data.Integer.Base using (ℤ; -_; +_; _◃_)
@@ -76,44 +79,51 @@ module _ -- {{𝕄 : RawMonadPlus M}}
           → ∀[ Parser (ℕ 0↑ℓ) ]
  decimalℕ = natFromDigits <$>C list⁺ decimalDigit
 
-{-
+ sign : ⦃ bd : Bind M ⦄ ⦃ alt : Alt M ⦄
+      → ∀[ Parser (Bool 0↑ℓ) ]
+ sign =
+         true <$C anyOf (map (C .into) $ '-' ∷ '−' ∷ [])
+    <|>C false <$C exact (C .into '+')
 
+ decimalℤ : ⦃ bd : Bind M ⦄ ⦃ alt : Alt M ⦄
+          → ∀[ Parser (ℤ 0↑ℓ) ]
+ decimalℤ = convert $²_ <$>C (sign <?&> decimalℕ) where
+   convert : Maybe Bool → ℕ → ℤ
+   convert ms n =
+     Maybe.rec (pos n)
+               (λ s → if s and is-positive? n
+                        then negsuc (pred n)
+                        else pos n)
+               ms
 
- sign : ∀[ Parser [ Sign ] ]
- sign = Sign.- <$ anyOf (List.map ℂ.into $ '-' ∷ '−' ∷ [])
-    <|> Sign.+ <$ exact (ℂ.into '+')
+ decimalFloat : ⦃ bd : Bind M ⦄ ⦃ alt : Alt M ⦄
+              → ∀[ Parser (Float 0↑ℓ) ]
+ decimalFloat = convert <$>C rawDouble where
 
-
- decimalℤ : ∀[ Parser [ ℤ ] ]
- decimalℤ = uncurry convert <$> (sign <?&> decimalℕ) where
-   convert : Maybe Sign → ℕ → ℤ
-   convert ms n = fromMaybe Sign.+ ms ◃ n
-
- decimalFloat : ∀[ Parser [ Float ] ]
- decimalFloat = convert <$> rawDouble where
-
-   fractional : ∀[ Parser [ List⁺ ℕ ] ]
-   fractional = exact (ℂ.into '.') &> box (list⁺ decimalDigit)
+   fractional : ∀[ Parser ((List⁺ ℕ) 0↑ℓ) ]
+   fractional {x} = exact (C .into '.') &>C box (list⁺ decimalDigit)
 
    fromFractional : List⁺ ℕ → Float
-   fromFractional ds = fromℕ (natFromDigits ds)
-               Float.÷ fromℕ (10 ℕ.^ List⁺.length ds)
+   fromFractional ds =
+     float-div (ℕ→float (natFromDigits ds))
+               (ℕ→float (10 ^ List⁺.len ds))
 
-   eNotation : ∀[ Parser [ Maybe Sign × ℕ ] ]
-   eNotation = anyOf (ℂ.into 'E' ∷ ℂ.into 'e' ∷ [])
-             &> box (sign <?&> decimalℕ)
+   eNotation : ∀[ Parser ((Maybe Bool × ℕ) 0↑ℓ) ]
+   eNotation {x} =
+     anyOf (C .into 'E' ∷ C .into 'e' ∷ [])
+            &>C box (sign <?&> decimalℕ)
 
-   fromENotation : Maybe Sign × ℕ → Float → Float
-   fromENotation (ms , e) f = case fromMaybe Sign.+ ms of λ where
-     Sign.- → f Float.÷ fromℕ (10 ℕ.^ e)
-     Sign.+ → f Float.* fromℕ (10 ℕ.^ e)
+   fromENotation : Maybe Bool × ℕ → Float → Float
+   fromENotation (ms , e) f =
+     if Maybe.from-just false ms
+        then float-div f (ℕ→float (10 ^ e))
+        else float-times f (ℕ→float (10 ^ e))
 
-   rawDouble : ∀[ Parser [ (ℤ × Maybe (List⁺ ℕ)) × Maybe (Maybe Sign × ℕ) ] ]
-   rawDouble = (decimalℤ <&?> box fractional) <&?> box eNotation
+   rawDouble : ∀[ Parser (((ℤ × Maybe (List⁺ ℕ)) × Maybe (Maybe Bool × ℕ)) 0↑ℓ) ]
+   rawDouble {x} = (decimalℤ <&?> box fractional) <&?> box eNotation
 
-   convert : (ℤ × Maybe (List⁺ ℕ)) × Maybe (Maybe Sign × ℕ) → Float
-   convert ((int , mfrac) , menot)
-     = maybe′ fromENotation id menot
-     $ maybe′ (λ m f → f Float.+ fromFractional m) id mfrac
-     $ fromℤ int
--}
+   convert : (ℤ × Maybe (List⁺ ℕ)) × Maybe (Maybe Bool × ℕ) → Float
+   convert ((int , mfrac) , menot) =
+     Maybe.rec id fromENotation menot $
+     Maybe.rec id (λ m f → float-plus f (fromFractional m)) mfrac $
+     ℤ→float int
