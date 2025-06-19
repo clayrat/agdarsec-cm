@@ -19,9 +19,7 @@ identifier : ∀[ Parser {ℓ = 0ℓ}
                        (chars {ℓb = 0ℓ} {E = ⊤ℓ} {A = ⊥ℓ} ⦃ bd = Bind-Id ⦄)
                        (Identifier 0↑ℓ) ]
 identifier {x} =
-   mkIdentifier
-     <$>C
-   (list⁺ $ alpha ⦃ alt = alt-agdarsecT ⦃ S = record { into = λ _ → lift tt } ⦄ ⦄)
+   mkIdentifier <$>C list⁺ alpha
   where instance _ = Bind-Id
 
 

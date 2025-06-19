@@ -24,8 +24,8 @@ instance
   Subset-refl : ∀ {ℓa} {A : 𝒰 ℓa} → Subset A A
   Subset-refl .into x = x
 
-  Subset-top : ∀ {ℓa} {A : 𝒰 ℓa} → Subset A ⊤
-  Subset-top .into _ = tt
+  Subset-lift-top : ∀ {ℓ ℓa} {A : 𝒰 ℓa} → Subset A (Lift ℓ ⊤)
+  Subset-lift-top .into _ = lift tt
 
   Subset-bot : ∀ {ℓa} {A : 𝒰 ℓa} → Subset ⊥ A
   Subset-bot .into x = absurd x

@@ -48,7 +48,7 @@ _ : _∈P_ {P = (chars {ℓb = 0ℓ} {E = ⊤ℓ} {A = ⊥ℓ} ⦃ bd = Bind-Id 
          ⦃ ch = choice-agdarsecT ⦃ bd = Bind-Id ⦄ ⦄
          jsn
          (value ⦃ bd = bind-agdarsecT ⦃ bd = Bind-Id ⦄ ⦄
-                ⦃ alt = alt-agdarsecT ⦃ bd = Bind-Id ⦄ ⦃ S = record { into = λ _ → lift tt } ⦄ ⦄)
+                ⦃ alt = alt-agdarsecT ⦃ bd = Bind-Id ⦄ ⦄)
 _ = object
       (("menu" ,
           object (  ("id"     , string "file")
