@@ -40,14 +40,14 @@ split str {n} lgth with uncons str | recall uncons str
 ... | just (c , s) | ⟪ eq ⟫ =
   mk-split c s (suc-inj (  ap (λ q → Maybe.rec zero (suc ∘ lengthₛ) (map snd q))
                               (eq ⁻¹)
-                         ∙ length-tail {s = str} ⁻¹
+                         ∙ length-tailₛ {s = str} ⁻¹
                          ∙ lgth))
                (=just→∈ eq)
 ... | nothing      | ⟪ eq ⟫ =
   absurd $  -- needed because of erasure
   false! (  ap (λ q → Maybe.rec zero (suc ∘ lengthₛ) (map snd q))
                (eq ⁻¹)
-          ∙ length-tail {s = str} ⁻¹
+          ∙ length-tailₛ {s = str} ⁻¹
           ∙ lgth)
 
 instance
