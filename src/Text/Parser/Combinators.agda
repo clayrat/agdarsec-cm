@@ -53,6 +53,12 @@ module _ ⦃ 𝕊 : Sized Tok Toks ⦄
 
 -- private module M = Effect M
 
+  {- Parses any token.
+
+     Assuming the token we are trying to parse consumes a non-empty prefix
+     of the input, this will always succeed and return the parsed
+     token.
+  -}
   anyTok : ⦃ mp : Map M ⦄ ⦃ alt : Alt M ⦄
          → ∀[ Parser Tok ]
   anyTok .run-parser m≤n s =
@@ -68,11 +74,23 @@ module _ ⦃ 𝕊 : Sized Tok Toks ⦄
          Maybe.rec fail pure $ guardMS p rA
 
   module _ {A : 𝒰≤ ℓ} where
+    {- Constrains a parser to succeed only when a predicate holds.
 
+       Given a predicate on a value, and a parser of such value,
+       this will fail when the predicate is false and will return the value if
+       the predicate is true.
+    -}
     guardC : ⦃ bd : Bind M ⦄ ⦃ alt : Alt M ⦄
           → (A →ℓ (Bool 0↑ℓ)) .ty → ∀[ Parser A ⇒ Parser A ]
     guardC p = guardMC λ a → if p a then just a else nothing
 
+    {- Processes a token into a `Maybe` value.
+
+       Given a function that maps a parsed token into a `Maybe a`, this function
+       will fail when the token is mapped to `Nothing` and
+       succeeds when the value is mapped into a `Just` value. The successful
+       value is then unwrapped and `Parser a` is returned.
+    -}
     maybeTok : ⦃ bd : Bind M ⦄ ⦃ alt : Alt M ⦄
              → (Tok →ℓ Maybeℓ A) .ty → ∀[ Parser A ]
     maybeTok p = guardMC p anyTok
@@ -86,9 +104,15 @@ module _ ⦃ 𝕊 : Sized Tok Toks ⦄
     box : ∀[ Parser A ⇒ □ Parser A ]
     box = Box.≤-close ≤-lower
 
+    {- A parser that always fails. -}
     failC : ⦃ alt : Alt M ⦄ → ∀[ Parser A ]
     failC .run-parser _ _ = fail
 
+    {- Given two parser, takes the first one that succeeds.
+
+       If the first parser fails, the second one will be attempted, if the second
+       one fails the whole parser fails. This is analogous to an `or` operation.
+    -}
     infixr 3 _<|>C_
     _<|>C_ : ⦃ ch : Choice M ⦄ → ∀[ Parser A ⇒ Parser A ⇒ Parser A ]
     (A₁ <|>C A₂) .run-parser m≤n s = A₁ .run-parser m≤n s <|> A₂ .run-parser m≤n s
@@ -332,30 +356,51 @@ module _ ⦃ 𝕊 : Sized Tok Toks ⦄
 
   module _ {A : 𝒰≤ ℓ} where
 
-    schainl-ty : ℕ → 𝒰 (ℓ ⊔ Effect.adj M ℓ)
-    schainl-ty = Success Toks A ⇒ □ Parser (A →ℓ A) ⇒ Effect.₀ M ∘ Success Toks A
+    LChain : ℕ → 𝒰 (ℓ ⊔ Effect.adj M ℓ)
+    LChain = Success Toks A ⇒ □ Parser (A →ℓ A) ⇒ Effect.₀ M ∘ Success Toks A
 
     schainl : ⦃ bd : Bind M ⦄ ⦃ ch : Choice M ⦄
-            → ∀[ schainl-ty ]
-    schainl = Box.fix schainl-ty $ λ rec sA op → rest rec sA op <|> pure sA
+            → ∀[ LChain ]
+    schainl = Box.fix LChain $ λ rec sA op → rest rec sA op <|> pure sA
       where
-      rest : ∀[ □ schainl-ty ⇒ schainl-ty ]
+      rest : ∀[ □ LChain ⇒ LChain ]
       rest rec (a ^ p<m ⸴ s) op =
         do sOp ← (Box.call op p<m) .run-parser ≤-refl s
            r ← Box.call rec p<m (mapS (_$ lowerℓ a) sOp) (Box.<↓ p<m op)
            pure (<-lift p<m r)
 
-    iterate : ⦃ bd : Bind M ⦄ ⦃ ch : Choice M ⦄
-            → ∀[ Parser A ⇒ □ Parser (A →ℓ A) ⇒ Parser A ]
-    iterate a op .run-parser m≤n s =
+    iteratel : ⦃ bd : Bind M ⦄ ⦃ ch : Choice M ⦄
+             → ∀[ Parser A ⇒ □ Parser (A →ℓ A) ⇒ Parser A ]
+    iteratel a op .run-parser m≤n s =
       do sA ← a .run-parser m≤n s
          schainl sA $ Box.≤↓ m≤n op
+
+    RChain : ℕ → 𝒰 (ℓ ⊔ Effect.adj M ℓ)
+    RChain = Parser (A →ℓ A) ⇒ Parser A ⇒ Parser A
+
+    iterater : ⦃ bd : Bind M ⦄ ⦃ ch : Choice M ⦄
+             → ∀[ RChain ]
+    iterater = Box.fix RChain λ rec op val → rest rec op val <|>C val
+      where
+      rest : ∀[ □ RChain ⇒ RChain ]
+      rest rec op val .run-parser m≤n s =
+        do sOp ← op .run-parser m≤n s
+           let (f ^ p<m ⸴ s′) = sOp
+               @0 sOp<n : _ < _
+               sOp<n = <-≤-trans p<m m≤n
+               rec′ = rec .Box.call sOp<n (<-lower sOp<n op) (<-lower sOp<n val)
+           res ← rec′ .run-parser refl s′
+           pure (<-lift p<m (mapS (lowerℓ $ f) res))
 
   module _ {A B : 𝒰≤ ℓ} where
 
     hchainl : ⦃ bd : Bind M ⦄ ⦃ ch : Choice M ⦄
             → ∀[ Parser A ⇒ □ Parser (A →ℓ (B →ℓ A)) ⇒ □ Parser B ⇒ Parser A ]
-    hchainl A op B = iterate A (Box.map² _<*>C_ (Box.map (flip <$>C_) op) (Box.duplicate B))
+    hchainl A op B = iteratel A (Box.map² _<*>C_ (Box.map (flip <$>C_) op) (Box.duplicate B))
+
+    hchainr : ⦃ bd : Bind M ⦄ ⦃ ch : Choice M ⦄
+            → ∀[ Parser A ⇒ □ Parser (A →ℓ (B →ℓ B)) ⇒ Parser B ⇒ Parser B ]
+    hchainr A op = iterater (flip _$_ <$>C A <*>C op)
 
   module _ {A : 𝒰≤ ℓ} where
 
@@ -363,32 +408,16 @@ module _ ⦃ 𝕊 : Sized Tok Toks ⦄
             → ∀[ Parser A ⇒ □ Parser (A →ℓ (A →ℓ A)) ⇒ Parser A ]
     chainl1 a op = hchainl a op (box a)
 
-    chainr1-ty : ℕ → 𝒰 (ℓ ⊔ Effect.adj M ℓ)
-    chainr1-ty = Parser A ⇒ □ Parser (A →ℓ (A →ℓ A)) ⇒ Parser A
-
     chainr1 : ⦃ bd : Bind M ⦄ ⦃ ch : Choice M ⦄
-            → ∀[ chainr1-ty ]
-    chainr1 = Box.fix chainr1-ty $ λ rec A op →
-                mk-parser λ m≤n s →
-                do sA ← A .run-parser m≤n s
-                   rest (Box.≤↓ m≤n rec) (≤-lower m≤n A) (Box.≤↓ m≤n op) sA <|> pure sA
-      where
-      rest : ∀[ □ chainr1-ty ⇒ Parser A ⇒ □ Parser (A →ℓ (A →ℓ A)) ⇒
-                Success Toks A ⇒ Effect.₀ M ∘ Success Toks A ]
-      rest rec A op sA@(a ^ m<n ⸴ s) =
-        do sOp ← (Box.call op m<n) .run-parser ≤-refl s
-           let (f ^ p<m ⸴ s′) = sOp
-           let @0 p<n : _ < _
-               p<n = <-trans p<m m<n
-           let rec′ = Box.call rec p<n (<-lower p<n A) (Box.<↓ p<n op)
-           <-lift p<n ∘ mapS (lowerℓ f (lowerℓ a) $_) <$> rec′ .run-parser ≤-refl s′
+            → ∀[ Parser A ⇒ □ Parser (A →ℓ (A →ℓ A)) ⇒ Parser A ]
+    chainr1 a op = hchainr a op a
 
     head+tail : ⦃ bd : Bind M ⦄ ⦃ ch : Choice M ⦄
               → ∀[ Parser A ⇒ □ Parser A ⇒ Parser (List⁺ℓ A) ]
     head+tail hd tl =
-      reverse⁺ <$>C (iterate {A = List⁺ℓ A}
-                             (List⁺.[_] <$>C hd)
-                             (Box.map (List⁺._∷⁺_ <$>C_) tl))
+      reverse⁺ <$>C (iteratel {A = List⁺ℓ A}
+                              (List⁺.[_] <$>C hd)
+                              (Box.map (List⁺._∷⁺_ <$>C_) tl))
 
     list⁺ : ⦃ bd : Bind M ⦄ ⦃ ch : Choice M ⦄
           → ∀[ Parser A ⇒ Parser (List⁺ℓ A) ]

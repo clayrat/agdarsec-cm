@@ -25,6 +25,9 @@ module _ {ℓ} {A B : ℕ → 𝒰 ℓ} where
 
 module _ {ℓ} {A : ℕ → 𝒰 ℓ} where
 
+ pure : ∀[ A ] → ∀[ □ A ]
+ pure a .call _ = a
+
  extract : ∀[ □ A ] → ∀[ A ]
  extract a = a .call <-ascend
 
